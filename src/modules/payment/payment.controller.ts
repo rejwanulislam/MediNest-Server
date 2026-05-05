@@ -1,29 +1,28 @@
-import { NextFunction, Request, Response } from "express"
-import { AppError } from "../../Errors/AppError"
-import Stripe from 'stripe';//  env check 
-const stripeSecretKey = process.env["STRIPE_SECRET_KEY"!]
-const stripeWebhookSecret = process.env["STRIPE_WEBHOOK_SECRET"!]
+// payment.controller.ts
+import { NextFunction, Request, Response } from "express";
+import { AppError } from "../../Errors/AppError";
 
-if (!stripeSecretKey) throw new AppError("STRIPE_SECRET_KEY .env This is not given")
-if (!stripeWebhookSecret) throw new AppError("STRIPE_WEBHOOK_SECRET .env This is not given")
+// ✅ Dynamic import - ESM এ stripe load করো
+const getStripe = async () => {
+  const { default: Stripe } = await import("stripe");
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+};
 
-//  Stripe initialize 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2023-10-16"
-});
-
-//  create-intent 
-export const createPaymentIntent = async (req: Request, res: Response, next: NextFunction) => {
+export const createPaymentIntent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
+    const stripe = await getStripe(); // ✅ এখানে load করো
+
     const { totalAmount, shippingAddress, phone, name, items } = req.body as {
-      totalAmount: number
-      shippingAddress: string
-      phone: string
-      name: string
-      items: { productId: string; quantity: number }[]
-    }
+      totalAmount: number;
+      shippingAddress: string;
+      phone: string;
+      name: string;
+      items: { productId: string; quantity: number }[];
+    };
 
     if (!totalAmount || !name || !phone || !shippingAddress || !items?.length) {
       return next(new AppError("Not all necessary information was provided.", 400));
@@ -35,52 +34,47 @@ export const createPaymentIntent = async (req: Request, res: Response, next: Nex
       automatic_payment_methods: { enabled: true },
       metadata: {
         customerName: name,
-        phone: phone,
-        shippingAddress: shippingAddress,
+        phone,
+        shippingAddress,
         itemCount: String(items.length),
       },
-    })
+    });
 
-    console.log("🟡 PaymentIntent create:", paymentIntent.id)
-    return res.status(200).json({ clientSecret: paymentIntent.client_secret })
+    return res.status(200).json({ clientSecret: paymentIntent.client_secret });
   } catch (error: any) {
-    console.error("❌ Error:", error.message)
-
-    return next(error)
+    return next(error);
   }
-}
+};
 
-// ── webhook ───────────────────────────────────────────────────────────────
-export const handleWebhook = async (req: Request, res: Response, next: NextFunction) => {
-  const sig = req.headers["stripe-signature"]
+export const handleWebhook = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const stripe = await getStripe();
+  const sig = req.headers["stripe-signature"];
 
-  if (!sig) {
-    return next(new AppError("Signature not found", 400));
-  }
+  if (!sig) return next(new AppError("Signature not found", 400));
 
-
-  let event: any
+  let event: any;
 
   try {
-    event = await stripe.webhooks.constructEventAsync(
+    event = stripe.webhooks.constructEvent(
       req.body as Buffer,
       sig,
-      stripeWebhookSecret
-    )
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
   } catch (err: any) {
-    console.error("❌ Webhook error:", err.message)
-    return next(err)
+    return next(err);
   }
 
   if (event.type === "payment_intent.succeeded") {
-    const intent = event.data.object
-
+    console.log("✅ Payment succeeded:", event.data.object.id);
   }
 
   if (event.type === "payment_intent.payment_failed") {
-    const intent = event.data.object
-    console.warn(intent.last_payment_error?.message)
+    console.warn("❌ Payment failed");
   }
 
-  return res.json({ received: true })
-}
+  return res.json({ received: true });
+};

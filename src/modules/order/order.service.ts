@@ -1,6 +1,6 @@
 
 
-import { orderStatus } from "../../../generated/prisma/enums"
+import { OrderStatus } from "../../../generated/prisma/enums"
 import { prisma } from "../../lib/prisma"
 import { Order } from "../../types"
 
@@ -21,7 +21,9 @@ const addOrder = async (data: Order, userID: string) => {
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
-              quantity: item.quantity
+              quantity: item.quantity,
+              price: item.price,
+              medicineName: item.name,
             })),
           },
         },
@@ -51,12 +53,10 @@ const getAllOrder = async () => {
             product: true
           },
         },
-        orderBy: {
-          createdAt: "desc"
-        }
       },
-
-
+      orderBy: {
+        createdAt: "desc"
+      }
     })
     return result
   } catch (error: any) {
@@ -107,7 +107,7 @@ const ggetOrderByID = async (customerId: string) => {
 };
 
 
-const updateOrder = async (id: string, status: orderStatus) => {
+const updateOrder = async (id: string, status: OrderStatus) => {
 
   try {
     const result = await prisma.orders.update({
@@ -142,7 +142,7 @@ const deleteOrder = async (id: string) => {
 export const orderService = {
   addOrder,
   getAllOrder,
-  getOrderByID,
+  ggetOrderByID,
   updateOrder,
   deleteOrder
 }

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import Stripe from 'stripe';
+
 import { ZodError } from 'zod';
 import { Prisma } from '../../generated/prisma/client';
 import { AppError } from './AppError';
@@ -18,7 +18,7 @@ export function errorMiddleware(
     error = err;
   } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     error = handlePrismaError(err);
-  } else if (err instanceof Stripe.errors.StripeError) {
+  } else if (err && typeof err === 'object' && 'type' in err && typeof err.type === 'string' && err.type.startsWith('Stripe')) {
     error = handleStripeError(err);
   } else if (err instanceof ZodError) {
     error = new AppError('Data verification failed', 422, err.flatten().fieldErrors as Record<string, string[]>);

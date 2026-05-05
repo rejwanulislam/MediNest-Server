@@ -1,8 +1,8 @@
-import  Stripe from 'stripe';
+
 import { AppError } from './AppError';
 
 export function handleStripeError(
-  err:Stripe.StripeError
+  err: any
 ): AppError {
   switch (err.type) {
     case 'StripeCardError':

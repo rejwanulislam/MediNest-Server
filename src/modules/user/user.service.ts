@@ -1,3 +1,4 @@
+import { UserStatus } from "../../../generated/prisma/enums"
 import { prisma } from "../../lib/prisma"
 
 const getAllUser = async () => {
@@ -17,7 +18,7 @@ const updateUser = async (id: string, status: string) => {
                 id
             },
             data: {
-                status
+                status: status as UserStatus,
             }
         })
         return result

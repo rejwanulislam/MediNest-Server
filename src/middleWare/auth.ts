@@ -1,54 +1,58 @@
-import { NextFunction, Request, Response } from "express"
-import { auth as betterAuth } from "../lib/auth"
-
+import { NextFunction, Request, Response } from "express";
+import { auth as betterAuth } from "../lib/auth";
 
 export enum userRole {
     user = "USER",
-    seler = "SELER",
+    seller = "SELLER", // টাইপো ঠিক করা হয়েছে (seler -> seller)
     admin = "ADMIN"
 }
+interface AuthenticatedRequest extends Request {
+    user?: {
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        status: string;
+        image: string;
+    };
+}
 
-declare global {
-    namespace Express {
-        interface Request {
-            user?: {
-                id: string
-                name: string
-                email: string
-                role: string
-                status: string
-                image: string
+const auth = (...roles: userRole[]) => {
+    return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        try {
+            const session = await betterAuth.api.getSession({
+                headers: req.headers
+            });
+
+            if (!session) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Unauthorized access. Please login."
+                });
             }
-        }
-    }
-}
 
- const auth = (...role: userRole[]) => {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        const session = await betterAuth.api.getSession({
-            headers: req.headers as any
-        })
-        if (!session) {
-            return res.send("You are not authroize")
-        }
-        req.user = {
-            id: session.user.id,
-            name: session.user.name,
-            email: session.user.email,
-            image: session.user.image as string,
-            role: session.user.role as string,
-            status:session.user.status as string
-        }
+            req.user = {
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email,
+                image: session.user.image as string,
+                role: session.user.role as string,
+                status: session.user.status as string
+            };
 
-        if(role.length&&!role.includes(req.user.role as userRole)){
-            return res.status(403).json({
-                message:"forbidden access"
-            })
+            if (roles.length && !roles.includes(req.user.role as userRole)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Forbidden: You don't have enough permission"
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error("Auth Middleware Error:", error);
+            return res.status(500).json({ message: "Internal Server Error" });
         }
-      
-          next()
-    }
-}
+    };
+};
 
-export default auth
-
+export default auth;

@@ -1,132 +1,85 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
-model Categories {
-  id            String      @id @default(uuid())
-  categorieName String
-  medicines     Medicines[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum OrderStatus {
+  Pending
+  Processing
+  Shipped
+  Delivered
+  Cancelled
 }
 
-model Medicines {
-  id           String      @id @default(uuid())
-  medicineName String
-  price        Int
-  image        String?
-  stock        Int
-  detels       String
-  manufacturer String
-  sellerId     String
-  seller       User        @relation(fields: [sellerId], references: [id])
-  categorieId  String
-  categorie    Categories  @relation(fields: [categorieId], references: [id])
-  orderItems   OrderItem[]
-  reviews      Reviews[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  cards        Card[]
+enum UserRole {
+  USER
+  ADMIN
+  SELLER
 }
 
-model Orders {
-  id         String @id @default(uuid())
-  customerId String
-  customer   User   @relation(fields: [customerId], references: [id])
-
-  items OrderItem[]
-
-  shippingAddress String
-  totalAmount     Int
-  status          orderStatus @default(Pending)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+enum UserStatus {
+  active
+  banned
 }
 
-model OrderItem {
-  id String @id @default(uuid())
-
-  orderId String
-  order   Orders @relation(fields: [orderId], references: [id])
-
-  productId String
-  product   Medicines @relation(fields: [productId], references: [id])
-
-  quantity Int
+enum InteractionType {
+  CATEGORY_VIEW
+  MEDICINE_VIEW
+  MEDICINE_SEARCH
 }
 
-
-
-
-
-
-model Reviews {
-  id         String    @id @default(uuid())
-  customerId String
-  customer   User      @relation(fields: [customerId], references: [id])
-  productId  String
-  product    Medicines @relation(fields: [productId], references: [id])
-  rating     Int
-  comment    String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-}
-
-model Card {
-  id         String    @id @default(uuid())
-  customerId String
-  customer   User      @relation(fields: [customerId], references: [id])
-  productId  String
-  product    Medicines @relation(fields: [productId], references: [id])
-  quantity   Int
-}
+// ─────────────────────────────────────────
+// AUTH MODELS
+// ─────────────────────────────────────────
 
 model User {
-  id            String    @id
+  id            String     @id
   name          String
-  email         String
-  emailVerified Boolean   @default(false)
+  email         String     @unique
+  emailVerified Boolean    @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  role          UserRole   @default(USER)
+  status        UserStatus @default(active)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  role      String?     @default("USER")
+  // Relations
+  sessions  Session[]
+  accounts  Account[]
   medicines Medicines[]
   orders    Orders[]
   reviews   Reviews[]
+  cards     Card[]
 
-  status String? @default("unban")
-  cards  Card[]
+  // AI Relations
+  searchLogs SearchLog[]
+  viewLogs   ViewLog[]
 
-  @@unique([email])
   @@map("user")
 }
 
 model Session {
   id        String   @id
   expiresAt DateTime
-  token     String
+  token     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([token])
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("session")
 }
@@ -135,8 +88,6 @@ model Account {
   id                    String    @id
   accountId             String
   providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -146,6 +97,9 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("account")
@@ -163,9 +117,138 @@ model Verification {
   @@map("verification")
 }
 
-enum orderStatus {
-  Pending
-  Processing
-  Shipped
-  Delivered
+// ─────────────────────────────────────────
+// CORE MODELS
+// ─────────────────────────────────────────
+
+model Categories {
+  id            String   @id @default(uuid())
+  categorieName String
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  medicines Medicines[]
+}
+
+model Medicines {
+  id           String  @id @default(uuid())
+  medicineName String
+  price        Int
+  image        String?
+  stock        Int     @default(0)
+  detels       String
+  manufacturer String
+
+  // AI Fields
+  uses        String? // কি কাজে লাগে
+  sideEffects String? // পার্শ্বপ্রতিক্রিয়া
+  isVectored  Boolean   @default(false) // Pinecone এ store হয়েছে কিনা
+  vectoredAt  DateTime? // কখন vector হয়েছে
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sellerId    String
+  seller      User       @relation(fields: [sellerId], references: [id])
+  categorieId String
+  categorie   Categories @relation(fields: [categorieId], references: [id])
+
+  orderItems OrderItem[]
+  reviews    Reviews[]
+  cards      Card[]
+  viewLogs   ViewLog[]
+  embedding  MedicineEmbedding?
+}
+
+model Orders {
+  id              String      @id @default(uuid())
+  shippingAddress String
+  totalAmount     Int
+  status          OrderStatus @default(Pending)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  customerId String
+  customer   User        @relation(fields: [customerId], references: [id])
+  items      OrderItem[]
+}
+
+model OrderItem {
+  id       String @id @default(uuid())
+  quantity Int
+  price    Int // order করার সময়ের price save করো
+
+  orderId   String
+  order     Orders    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Medicines @relation(fields: [productId], references: [id])
+}
+
+model Reviews {
+  id        String   @id @default(uuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customerId String
+  customer   User      @relation(fields: [customerId], references: [id])
+  productId  String
+  product    Medicines @relation(fields: [productId], references: [id])
+}
+
+model Card {
+  id       String @id @default(uuid())
+  quantity Int
+
+  customerId String
+  customer   User      @relation(fields: [customerId], references: [id])
+  productId  String
+  product    Medicines @relation(fields: [productId], references: [id])
+
+  // একজন user একটা product একবারই cart এ রাখতে পারবে
+  @@unique([customerId, productId])
+}
+
+// ─────────────────────────────────────────
+// AI TRACKING MODELS
+// ─────────────────────────────────────────
+
+// User কি search করেছে track করে
+model SearchLog {
+  id        String   @id @default(uuid())
+  query     String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// User কোন medicine দেখেছে track করে
+model ViewLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicineId String
+  medicine   Medicines @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([medicineId])
+}
+
+model MedicineEmbedding {
+  id         String                       @id @default(uuid())
+  medicineId String                       @unique
+  medicine   Medicines                    @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  embedding  Unsupported("vector(1024)")? // 768 → 1024
+  content    String
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
 }

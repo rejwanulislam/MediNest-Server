@@ -11,12 +11,16 @@ import { userRouter } from "./modules/user/user.route"
 import { cardRouter } from "./modules/card/card.router"
 import { paymentrouter } from "./modules/payment/payment.router"
 import { errorMiddleware } from "./Errors/errorMiddleware"
+import { aiRouter } from "./modules/ai/ai.routes"
 export const app = express()
 
 // ── CORS ───────────────────────────────────────────────────────────────────
 const allowedOrigins = [
-  process.env.APP_URL ,
-   "http://localhost:3000",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "https://medi-nest-server-beta.vercel.app",
+  "https://medinest-client-pearl.vercel.app",
+
 ].filter(Boolean)
 
 app.use(
@@ -39,7 +43,7 @@ app.use(
   })
 )
 
- 
+
 app.use(
   "/api/payment/webhook",
   express.raw({ type: "application/json" })
@@ -59,6 +63,7 @@ app.use("/", orderRouter)
 app.use("/", reviedRouter)
 app.use("/", userRouter)
 app.use("/", cardRouter)
+app.use("/api/ai", aiRouter)
 app.use(errorMiddleware)
 
 app.get("/", (req: Request, res: Response) => {
