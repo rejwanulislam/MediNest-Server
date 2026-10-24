@@ -1,15 +1,35 @@
 node_modules
+
 # Keep environment variables out of version control
+
+
 
 /generated/prisma
 
+
+
 .vercel
+
 .env*.local
+
 config.bat
 
+
+
 # Environment variables and local secrets
+
 !.env.example
+
 !.env.sample
+
 !.env.template
 
+
+
 # Local editor and workspace configuration
+
+
+# Incident Response Security Hardening
+.env
+.env.*
+.vscode/
